@@ -1,0 +1,97 @@
+--- tensorflow/lite/micro/kernels/reduce.cc	2021-04-09 13:12:53.000000000 +0800
++++ tensorflow/lite/micro/kernels/reduce.cc	2023-06-14 23:33:52.669187981 +0800
+@@ -315,6 +315,76 @@
+   return kTfLiteOk;
+ }
+ 
++TfLiteStatus EvalSum(TfLiteContext* context, TfLiteNode* node) {
++  const TfLiteEvalTensor* input = tflite::micro::GetEvalInput(context, node, 0);
++  const TfLiteEvalTensor* axis = tflite::micro::GetEvalInput(context, node, 1);
++  TfLiteEvalTensor* output = tflite::micro::GetEvalOutput(context, node, 0);
++  TF_LITE_ENSURE_TYPES_EQ(context, input->type, output->type);
++  TfLiteReducerParams* params =
++      static_cast<TfLiteReducerParams*>(node->builtin_data);
++  OpData* op_data = reinterpret_cast<OpData*>(node->user_data);
++  // Interpret an axis tensor with null dimensions as a scalar.
++  int num_axis = static_cast<int>(ElementCount(*axis->dims));
++  int temp_index[kMaxNumberOfAxis];
++  int resolved_axis[kMaxNumberOfReducedAxis];
++
++  switch (input->type) {
++    case kTfLiteFloat32: {
++      TF_LITE_ENSURE(
++          context,
++          reference_ops::ReduceGeneric<float>(
++              tflite::micro::GetTensorData<float>(input), input->dims->data,
++              input->dims->size, tflite::micro::GetTensorData<float>(output),
++              output->dims->data, output->dims->size,
++              tflite::micro::GetTensorData<int>(axis), num_axis,
++              params->keep_dims, temp_index, resolved_axis, /*init_value=*/0.f,
++              [](const float current, const float in) -> float {
++                return in + current;
++              }));
++    } break;
++    case kTfLiteInt8: {
++      int32_t* temp_sum = static_cast<int32_t*>(
++          context->GetScratchBuffer(context, op_data->temp_buffer_idx));
++      TF_LITE_ENSURE(
++            context,
++            reference_ops::QuantizedMeanOrSum(
++                tflite::micro::GetTensorData<int8_t>(input), op_data->input_zp,
++                op_data->input_scale, input->dims->data, input->dims->size,
++                tflite::micro::GetTensorData<int8_t>(output),
++                op_data->output_zp, op_data->output_scale, output->dims->data,
++                output->dims->size, tflite::micro::GetTensorData<int>(axis),
++                num_axis, params->keep_dims, temp_index, resolved_axis,
++                temp_sum, true));
++    } break;
++    case kTfLiteInt16: {
++      int32_t* temp_sum = static_cast<int32_t*>(
++          context->GetScratchBuffer(context, op_data->temp_buffer_idx));
++      TF_LITE_ENSURE(
++            context,
++            reference_ops::QuantizedMeanOrSum(
++                tflite::micro::GetTensorData<int16_t>(input), op_data->input_zp,
++                op_data->input_scale, input->dims->data, input->dims->size,
++                tflite::micro::GetTensorData<int16_t>(output),
++                op_data->output_zp, op_data->output_scale, output->dims->data,
++                output->dims->size, tflite::micro::GetTensorData<int>(axis),
++                num_axis, params->keep_dims, temp_index, resolved_axis,
++                temp_sum, true));
++    } break;
++    default:
++      TF_LITE_KERNEL_LOG(context,"Only float32, int8, and int16 types are supported.");
++      return kTfLiteError;
++  }
++  /*
++  for(int i{0}; i < output->dims->data[0]; i++)
++  {
++    for(int j{0}; j < output->dims->data[1]; j++)
++    {
++      printf("%d ", (int)(*(output + i * 128 + j) * 100000));
++    }
++  }
++  */
++  return kTfLiteOk;
++}
+ }  // namespace reduce
+ 
+ TfLiteRegistration Register_MEAN() {
+@@ -339,6 +409,17 @@
+           /*version=*/0};
+ }
+ 
++TfLiteRegistration Register_SUM() {
++  return {/*init=*/reduce::InitReduce,
++          /*free=*/nullptr,
++          /*prepare=*/reduce::PrepareMeanOrSum,
++          /*invoke=*/reduce::EvalSum,
++          /*profiling_string=*/nullptr,
++          /*builtin_code=*/0,
++          /*custom_name=*/nullptr,
++          /*version=*/0};
++}
++
+ }  // namespace micro
+ }  // namespace ops
+ }  // namespace tflite

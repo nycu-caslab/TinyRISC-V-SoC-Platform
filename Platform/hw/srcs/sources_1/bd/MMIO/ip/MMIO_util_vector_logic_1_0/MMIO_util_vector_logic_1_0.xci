@@ -1,0 +1,53 @@
+{
+  "schema": "xilinx.com:schema:json_instance:1.0",
+  "ip_inst": {
+    "xci_name": "MMIO_util_vector_logic_1_0",
+    "cell_name": "util_vector_logic_3",
+    "component_reference": "xilinx.com:ip:util_vector_logic:2.0",
+    "ip_revision": "4",
+    "gen_directory": "../../../../../../CUSTOM_SoC.gen/sources_1/bd/MMIO/ip/MMIO_util_vector_logic_1_0",
+    "parameters": {
+      "component_parameters": {
+        "Component_Name": [ { "value": "MMIO_util_vector_logic_1_0", "resolve_type": "user", "usage": "all" } ],
+        "C_SIZE": [ { "value": "2", "value_src": "user", "resolve_type": "user", "format": "long", "usage": "all" } ],
+        "C_OPERATION": [ { "value": "or", "value_src": "user", "resolve_type": "user", "usage": "all" } ],
+        "LOGO_FILE": [ { "value": "data/sym_orgate.png", "resolve_type": "user", "enabled": false, "usage": "all" } ]
+      },
+      "model_parameters": {
+        "C_OPERATION": [ { "value": "or", "resolve_type": "generated", "usage": "all" } ],
+        "C_SIZE": [ { "value": "2", "resolve_type": "generated", "format": "long", "usage": "all" } ]
+      },
+      "project_parameters": {
+        "ARCHITECTURE": [ { "value": "artix7" } ],
+        "BASE_BOARD_PART": [ { "value": "" } ],
+        "BOARD_CONNECTIONS": [ { "value": "" } ],
+        "DEVICE": [ { "value": "xc7a100t" } ],
+        "NEXTGEN_VERSAL": [ { "value": "0" } ],
+        "PACKAGE": [ { "value": "csg324" } ],
+        "PREFHDL": [ { "value": "VERILOG" } ],
+        "SILICON_REVISION": [ { "value": "" } ],
+        "SIMULATOR_LANGUAGE": [ { "value": "MIXED" } ],
+        "SPEEDGRADE": [ { "value": "-1" } ],
+        "STATIC_POWER": [ { "value": "" } ],
+        "TEMPERATURE_GRADE": [ { "value": "" } ]
+      },
+      "runtime_parameters": {
+        "IPCONTEXT": [ { "value": "IP_Integrator" } ],
+        "IPREVISION": [ { "value": "4" } ],
+        "MANAGED": [ { "value": "TRUE" } ],
+        "OUTPUTDIR": [ { "value": "../../../../../../CUSTOM_SoC.gen/sources_1/bd/MMIO/ip/MMIO_util_vector_logic_1_0" } ],
+        "SELECTEDSIMMODEL": [ { "value": "" } ],
+        "SHAREDDIR": [ { "value": "../../../../../../srcs/sources_1/bd/MMIO/ipshared" } ],
+        "SWVERSION": [ { "value": "2024.1" } ],
+        "SYNTHESISFLOW": [ { "value": "GLOBAL" } ]
+      }
+    },
+    "boundary": {
+      "ports": {
+        "Op1": [ { "direction": "in", "size_left": "1", "size_right": "0", "driver_value": "0" } ],
+        "Op2": [ { "direction": "in", "size_left": "1", "size_right": "0", "driver_value": "0" } ],
+        "Res": [ { "direction": "out", "size_left": "1", "size_right": "0" } ]
+      }
+    }
+  }
+}

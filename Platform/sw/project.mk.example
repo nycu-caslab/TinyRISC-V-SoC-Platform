@@ -1,0 +1,20 @@
+# Copy this file to project.mk for local software build settings.
+# project.mk is ignored by git.
+
+# Uncomment both MODEL_FILE and MODEL_PROFILE to embed a model and enable TFLM.
+MODEL_DIR := models
+# MODEL_FILE := ad01_int8.tflite
+# MODEL_PROFILE := ad01
+
+# Common bring-up knobs.
+TENSOR_ARENA_SIZE := 262144
+
+# Embedded toolchain prefix.
+TARGET_PREFIX := riscv64-unknown-elf
+
+# Use software Cfu() fallback instead of CUSTOM-0 instructions.
+USE_SOFTWARE_CFU := 0
+
+# Add local source files or preprocessor definitions when needed.
+# APP_EXTRA_SRCS += project/my_extra_file.cc
+# APP_DEFINES += -DMY_FLAG=1

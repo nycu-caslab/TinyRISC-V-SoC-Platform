@@ -1,0 +1,90 @@
+{
+   "ActiveEmotionalView":"Default View",
+   "Default View_Layers":"/cpu_psr_bus_struct_reset:true|/mig_7series_0_ui_clk_sync_rst:true|/M01_ARESETN_1:true|/cpu_psr_mb_reset:true|/ext_reset_in_0_1:true|",
+   "Default View_ScaleFactor":"1.3978",
+   "Default View_TopLeft":"2288,1120",
+   "Display-IntfOthers":"true",
+   "Display-IntfTypeAXIMM":"true",
+   "Display-PortTypeReset":"true",
+   "ExpandedHierarchyInLayout":"",
+   "guistr":"# # String gsaved with Nlview 7.7.1 2023-07-26 3bc4126617 VDI=43 GEI=38 GUI=JA:21.0 TLS
+#  -string -flagsOSRD
+preplace port UART_0 -pg 1 -lvl 9 -x 3190 -y 610 -defaultsOSRD
+preplace port DDR3_0 -pg 1 -lvl 9 -x 3190 -y 460 -defaultsOSRD
+preplace port port-id_clk_in -pg 1 -lvl 0 -x -10 -y 1560 -defaultsOSRD
+preplace port port-id_button_resetn -pg 1 -lvl 0 -x -10 -y 1290 -defaultsOSRD
+preplace port port-id_sys_clk -pg 1 -lvl 9 -x 3190 -y 1270 -defaultsOSRD
+preplace portBus mem_retn -pg 1 -lvl 9 -x 3190 -y 1370 -defaultsOSRD
+preplace inst axi_interconnect_0 -pg 1 -lvl 6 -x 2200 -y 990 -defaultsOSRD
+preplace inst mig_7series_0 -pg 1 -lvl 8 -x 2980 -y 500 -defaultsOSRD
+preplace inst icache_axiBus_bridge_0 -pg 1 -lvl 6 -x 2200 -y 770 -defaultsOSRD
+preplace inst dcache_axiBus_bridge_0 -pg 1 -lvl 6 -x 2200 -y 530 -defaultsOSRD
+preplace inst xlconstant_0 -pg 1 -lvl 6 -x 2200 -y 1350 -defaultsOSRD
+preplace inst util_vector_logic_0 -pg 1 -lvl 1 -x 160 -y 1480 -defaultsOSRD
+preplace inst cpu_psr -pg 1 -lvl 3 -x 810 -y 1310 -defaultsOSRD
+preplace inst util_vector_logic_1 -pg 1 -lvl 4 -x 1180 -y 1270 -defaultsOSRD
+preplace inst util_vector_logic_2 -pg 1 -lvl 8 -x 2980 -y 1430 -defaultsOSRD
+preplace inst axi_uartlite_0 -pg 1 -lvl 7 -x 2640 -y 1010 -defaultsOSRD
+preplace inst smartconnect_0 -pg 1 -lvl 7 -x 2640 -y 490 -defaultsOSRD
+preplace inst util_vector_logic_3 -pg 1 -lvl 2 -x 460 -y 1490 -defaultsOSRD
+preplace inst NPU_0 -pg 1 -lvl 6 -x 2200 -y 240 -defaultsOSRD
+preplace inst CPU_0 -pg 1 -lvl 5 -x 1700 -y 600 -defaultsOSRD
+preplace inst clk_wiz_0 -pg 1 -lvl 7 -x 2640 -y 1300 -defaultsOSRD
+preplace inst jtag_axi_0 -pg 1 -lvl 6 -x 2200 -y 1240 -defaultsOSRD
+preplace inst mig_psr_0 -pg 1 -lvl 5 -x 1700 -y 1370 -defaultsOSRD
+preplace netloc CPU_0_dbus_rm_addr 1 5 1 1910 520n
+preplace netloc CPU_0_dbus_rm_vld 1 5 1 1930 540n
+preplace netloc CPU_0_dbus_wm_data 1 5 1 1970 580n
+preplace netloc CPU_0_dbus_wm_vld 1 5 1 1960 560n
+preplace netloc CPU_0_ibus_req_rm 1 5 1 1990 510n
+preplace netloc CPU_0_ibus_rm_addr 1 5 1 1980 530n
+preplace netloc CPU_0_npu_funct3 1 5 1 1950 280n
+preplace netloc CPU_0_npu_funct7 1 5 1 2020 300n
+preplace netloc CPU_0_npu_rs1 1 5 1 1900 220n
+preplace netloc CPU_0_npu_rs2 1 5 1 1920 240n
+preplace netloc CPU_0_npu_start 1 5 1 1940 260n
+preplace netloc M01_ARESETN_1 1 3 4 990J 1200 NJ 1200 2040 1120 2490
+preplace netloc NPU_0_NPU_done 1 4 3 1370 50 NJ 50 2370
+preplace netloc NPU_0_NPU_out 1 4 3 1380 60 NJ 60 2360
+preplace netloc clk_in_1 1 0 7 NJ 1560 NJ 1560 NJ 1560 NJ 1560 NJ 1560 NJ 1560 2500J
+preplace netloc clk_wiz_0_clk_out1 1 7 1 2810 500n
+preplace netloc clk_wiz_0_locked 1 7 1 2830 480n
+preplace netloc cpu_psr_bus_struct_reset 1 3 5 1000J 1210 NJ 1210 1900J 1430 NJ 1430 NJ
+preplace netloc cpu_psr_mb_reset 1 3 1 NJ 1270
+preplace netloc dcache_axiBus_bridge_0_rm_complete 1 4 3 1390 70 NJ 70 2440
+preplace netloc dcache_axiBus_bridge_0_rm_data 1 4 3 1400 80 NJ 80 2430
+preplace netloc dcache_axiBus_bridge_0_rm_rdy 1 4 3 1410 90 NJ 90 2420
+preplace netloc dcache_axiBus_bridge_0_rm_success 1 4 3 1420 100 NJ 100 2410
+preplace netloc dcache_axiBus_bridge_0_wm_complete 1 4 3 1430 110 NJ 110 2400
+preplace netloc dcache_axiBus_bridge_0_wm_rdy 1 4 3 1450 120 NJ 120 2390
+preplace netloc dcache_axiBus_bridge_0_wm_success 1 4 3 1440 370 NJ 370 2380
+preplace netloc ext_reset_in_0_1 1 0 3 NJ 1290 NJ 1290 N
+preplace netloc icache_axiBus_bridge_0_rm_complete 1 4 3 1500 1110 NJ 1110 2360
+preplace netloc icache_axiBus_bridge_0_rm_data 1 4 3 1460 380 NJ 380 2370
+preplace netloc icache_axiBus_bridge_0_rm_rdy 1 4 3 1470 390 NJ 390 2360
+preplace netloc icache_axiBus_bridge_0_rm_success 1 4 3 1490 870 NJ 870 2390
+preplace netloc mig_7series_0_init_calib_complete 1 1 8 310 1420 NJ 1420 NJ 1420 1330J 1490 NJ 1490 NJ 1490 NJ 1490 3130
+preplace netloc mig_7series_0_mmcm_locked 1 2 7 630 1500 NJ 1500 NJ 1500 NJ 1500 NJ 1500 NJ 1500 3150
+preplace netloc mig_7series_0_ui_clk 1 2 7 630 460 NJ 460 1360 360 2010 1130 2500 1220 2780J 1270 N
+preplace netloc mig_7series_0_ui_clk1 1 4 5 1480 400 N 400 2470 610 NJ 610 3140
+preplace netloc mig_7series_0_ui_clk_sync_rst 1 0 9 10 1570 NJ 1570 620J 1510 NJ 1510 1490J 1510 NJ 1510 NJ 1510 NJ 1510 3160
+preplace netloc mig_psr_0_peripheral_aresetn 1 5 3 2030 660 NJ 660 2820J
+preplace netloc util_vector_logic_0_Res 1 1 1 NJ 1480
+preplace netloc util_vector_logic_1_Res 1 4 2 1350 200 N
+preplace netloc util_vector_logic_2_Res 1 5 4 2040 670 NJ 670 2780J 1010 3170
+preplace netloc util_vector_logic_3_Res 1 2 1 610 1310n
+preplace netloc xlconstant_0_dout 1 6 1 2390J 1290n
+preplace netloc CPU_0_m_axi_lite 1 5 1 2000 490n
+preplace netloc NPU_0_M_AXI 1 6 1 2480 210n
+preplace netloc axi_interconnect_0_M00_AXI 1 6 1 N 990
+preplace netloc axi_uartlite_0_UART 1 7 2 NJ 1000 3170
+preplace netloc dcache_axiBus_bridge_0_M_AXI 1 6 1 2450 430n
+preplace netloc icache_axiBus_bridge_0_M_AXI 1 6 1 2460 450n
+preplace netloc jtag_axi_0_M_AXI 1 6 1 2480 490n
+preplace netloc mig_7series_0_DDR3 1 8 1 N 460
+preplace netloc smartconnect_0_M00_AXI 1 7 1 2790 460n
+levelinfo -pg 1 -10 160 460 810 1180 1700 2200 2640 2980 3190
+pagesize -pg 1 -db -bbox -sgen -160 0 3350 1580
+"
+}
+0

@@ -1,0 +1,15 @@
+--- tensorflow/lite/micro/kernels/arc_mli/depthwise_conv.cc	2021-04-09 13:12:53.000000000 +0800
++++ tensorflow/lite/micro/kernels/arc_mli/depthwise_conv.cc	2023-07-08 01:12:31.559204895 +0800
+@@ -509,6 +509,12 @@
+     default:
+       TF_LITE_KERNEL_LOG(context, "Type %s (%d) not supported.",
+                          TfLiteTypeGetName(input->type), input->type);
++      #ifndef TENSORFLOW_LITE_KERNELS_INTERNAL_REFERENCE_POOLINGH
++        const mli_tensor *in;
++        const mli_pool_cfg *cfg;
++        mli_tensor *out;
++        mli_krn_maxpool_hwc_sa8(in, cfg, out);
++      #endif
+       return kTfLiteError;
+   }
+   return kTfLiteOk;

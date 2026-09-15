@@ -1,0 +1,9 @@
+utils_1/
+*.gen/
+*.git/
+.Xil/
+build/
+Platform/sw/project.mk
+Platform/hw/srcs/sources_1/bd/MMIO/ipshared/
+vivado*.jou
+vivado*.log
