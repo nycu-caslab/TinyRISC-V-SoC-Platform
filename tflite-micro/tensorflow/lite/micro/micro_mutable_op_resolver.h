@@ -606,6 +606,10 @@ class MicroMutableOpResolver : public MicroOpResolver {
     return AddBuiltin(BuiltinOperator_SUM, 
                         Register_SUM(), ParseReducer);
   }
+
+  TfLiteStatus AddBatchMatMul() {
+    return AddBuiltin(BuiltinOperator_BATCH_MATMUL, Register_BATCH_MATMUL(), ParseBatchMatMul);
+  }
   /********************** new_add *********************/
 
   unsigned int GetRegistrationLength() { return registrations_len_; }

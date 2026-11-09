@@ -61,3 +61,66 @@ const Menu kPerfMenu = {
 }  // namespace
 
 void perf_test_menu(void) { menu_run(&kPerfMenu); }
+
+
+PerfResult perf_result;
+
+PerfResult::PerfResult(){clear_results();}
+
+void PerfResult::add_start(int idx){
+    if (idx < 0 || idx >= PERF_RESULT_MAX) {
+        return;
+    }
+
+    starts[idx]++;
+}
+
+void PerfResult::add_result(int idx, uint64_t cycles){
+    if (idx < 0 || idx >= PERF_RESULT_MAX) {
+        return;
+    }
+    results[idx] += cycles;
+}
+
+void PerfResult::print_cycles(uint64_t cycles, int width) {
+    char buf[32];
+    if (cycles > 4294967295ULL) {
+        snprintf(buf, sizeof(buf), "%u%09u", 
+                 (uint32_t)(cycles / 1000000000ULL),
+                 (uint32_t)(cycles % 1000000000ULL));
+    } else {
+        snprintf(buf, sizeof(buf), "%u", (uint32_t)cycles);
+    }
+    // Print formatted string right-aligned within target width
+    printf("%*s", width, buf);
+}
+
+void PerfResult::print_results(void) {
+    printf("==============================================\n");
+    printf(" Counter |       Total | Starts |   Average   \n");
+    printf("---------+-------------+--------+-------------\n");
+
+    for (int i = 0; i < PERF_RESULT_MAX; ++i) {
+        if (starts[i] == 0) {
+            printf("    %d    |           0 |      0 |         n/a\n", i);
+            continue;
+        }
+        
+        uint64_t average = results[i] / starts[i];
+        
+        printf("    %d    | ", i);
+        print_cycles(results[i], 11);         // Total column (width 11)
+        printf(" | %6d | ", starts[i]);
+        print_cycles(average, 11);            // Average column (width 11)
+        putchar('\n');
+    }
+    
+    printf("==============================================\n");
+}
+
+void PerfResult::clear_results(void){
+    for (int i = 0; i < PERF_RESULT_MAX; ++i) {
+        results[i] = 0;
+        starts[i] = 0;
+    }
+}

@@ -94,6 +94,7 @@ TfLiteRegistration Register_UNIDIRECTIONAL_SEQUENCE_LSTM();
 TfLiteRegistration Register_VAR_HANDLE();
 TfLiteRegistration Register_WHILE();
 TfLiteRegistration Register_ZEROS_LIKE();
+TfLiteRegistration Register_BATCH_MATMUL();
 
 namespace ops {
 namespace micro {
@@ -131,6 +132,7 @@ TfLiteRegistration Register_TANH();
 TfLiteRegistration* Register_AUDIO_SPECTROGRAM();
 TfLiteRegistration* Register_MFCC();
 TfLiteRegistration Register_SUM();
+
 }  // namespace micro
 }  // namespace ops
 }  // namespace tflite

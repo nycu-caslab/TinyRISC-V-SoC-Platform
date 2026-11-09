@@ -37,4 +37,19 @@ void perf_print_time_ms(uint64_t cycles);
 void perf_print_now(void);
 void perf_test_menu(void);
 
+#define PERF_RESULT_MAX 10
+class PerfResult {
+    uint64_t results[PERF_RESULT_MAX];
+    int32_t starts[PERF_RESULT_MAX];
+public:
+    PerfResult();
+    void add_result(int idx, uint64_t cycles);
+    void add_start(int idx);
+    void print_results(void);
+    void clear_results(void);
+    void print_cycles(uint64_t cycles, int width);
+};
+
+extern PerfResult perf_result;
+
 #endif  // PLATFORM_SW_APP_PERF_H_
