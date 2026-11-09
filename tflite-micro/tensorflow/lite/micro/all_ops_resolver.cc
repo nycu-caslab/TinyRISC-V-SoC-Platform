@@ -123,6 +123,7 @@ AllOpsResolver::AllOpsResolver() {
   AddVarHandle();
   AddWhile();
   AddZerosLike();
+  AddBatchMatMul();
 }
 
 }  // namespace tflite

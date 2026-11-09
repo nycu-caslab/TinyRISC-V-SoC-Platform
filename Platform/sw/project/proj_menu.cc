@@ -6,6 +6,9 @@
 #include "platform_test.h"
 #include "simd_mac_test.h"
 
+extern void run_logistic_test();
+extern void run_transpose_test();
+
 namespace {
 
 const MenuItem kLabItems[] = {
@@ -14,12 +17,14 @@ const MenuItem kLabItems[] = {
     MENU_ITEM('c', "Basic Convolution Test", conv_address_aligned_test),
     MENU_ITEM('d', "Basic platform tests", platform_test),
     MENU_ITEM('e', "Standalone SIMD INT8 MAC Test", simd_mac_test),
+    MENU_ITEM('l', "run logistic test", run_logistic_test),
+    MENU_ITEM('t', "run transpose test", run_transpose_test),
     MENU_END,
 };
 
 const Menu kLabMenu = {
-    "Lab 1: Aligned AXI Data on SIMD",
-    "lab1",
+    "Lab : Self Test",
+    "lab",
     kLabItems,
 };
 
