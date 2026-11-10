@@ -1,0 +1,285 @@
+SYNC!@#[2J[H
+TinyRISC-V SoC Platform
+=======================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> l[2J[H
+Running Lab menu
+[2J[H
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> l[2J[H
+Running run logistic test
+[PASS] LogisticQuantizedInt8AroundZeroShouldMatchGolden
+[PASS] LogisticQuantizedInt8NarrowRangeShouldMatchGolden
+[PASS] LogisticQuantizedInt8BasicShouldMatchGolden
+[PASS] LogisticQuantizedInt8WideRangeShouldMatchGolden
+Logistic tests: 4/4 passed
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> t[2J[H
+Running run transpose test
+[PASS] 2D_2x3_perm10
+[PASS] 2D_4x5_perm10
+[PASS] 2D_1x8_perm10
+[PASS] 2D_identity_3x4_perm01
+[PASS] 3D_2x2x2_perm210
+[PASS] 3D_2x3x4_perm201
+[PASS] 3D_2x3x4_perm021
+[PASS] 3D_3x2x5_perm102
+[PASS] 3D_identity_2x3x4_perm012
+[PASS] 4D_NHWC_to_NCHW_1x3x4x2
+[PASS] 4D_NCHW_to_NHWC_2x2x3x4
+[PASS] 4D_reverse_2x3x2x3_perm3210
+[PASS] 5D_2x2x2x2x3_perm43210
+[PASS] 6D_2x2x2x2x2x2_perm543210
+Transpose tests: 14/14 passed
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> a[2J[H
+Running Accelerator AXI Aligned Test
+
+=== Accelerator AXI Test ===
+[AXI] Backend: hardware CUSTOM-0.
+[AXI] 16 aligned 32-bit words; exact golden comparison.
+[PASS] AXI read[0]: actual=0x00000000 golden=0x00000000
+[PASS] AXI read[1]: actual=0xffffffff golden=0xffffffff
+[PASS] AXI read[2]: actual=0x55555555 golden=0x55555555
+[PASS] AXI read[3]: actual=0xaaaaaaaa golden=0xaaaaaaaa
+[PASS] AXI read[4]: actual=0x00000001 golden=0x00000001
+[PASS] AXI read[5]: actual=0x80000000 golden=0x80000000
+[PASS] AXI read[6]: actual=0x01234567 golden=0x01234567
+[PASS] AXI read[7]: actual=0x89abcdef golden=0x89abcdef
+[PASS] AXI read[8]: actual=0x13579bdf golden=0x13579bdf
+[PASS] AXI read[9]: actual=0x2468ace0 golden=0x2468ace0
+[PASS] AXI read[10]: actual=0x00ff00ff golden=0x00ff00ff
+[PASS] AXI read[11]: actual=0xff00ff00 golden=0xff00ff00
+[PASS] AXI read[12]: actual=0x0000ffff golden=0x0000ffff
+[PASS] AXI read[13]: actual=0xffff0000 golden=0xffff0000
+[PASS] AXI read[14]: actual=0x55aa1234 golden=0x55aa1234
+[PASS] AXI read[15]: actual=0xcafe9999 golden=0xcafe9999
+[PASS] AXI write[0]: actual=0xffffffff golden=0xffffffff
+[PASS] AXI write[1]: actual=0x00000000 golden=0x00000000
+[PASS] AXI write[2]: actual=0xaaaaaaaa golden=0xaaaaaaaa
+[PASS] AXI write[3]: actual=0x55555555 golden=0x55555555
+[PASS] AXI write[4]: actual=0xfffffffe golden=0xfffffffe
+[PASS] AXI write[5]: actual=0x7fffffff golden=0x7fffffff
+[PASS] AXI write[6]: actual=0xfedcba98 golden=0xfedcba98
+[PASS] AXI write[7]: actual=0x76543210 golden=0x76543210
+[PASS] AXI write[8]: actual=0xeca86420 golden=0xeca86420
+[PASS] AXI write[9]: actual=0xdb97531f golden=0xdb97531f
+[PASS] AXI write[10]: actual=0xff00ff00 golden=0xff00ff00
+[PASS] AXI write[11]: actual=0x00ff00ff golden=0x00ff00ff
+[PASS] AXI write[12]: actual=0xffff0000 golden=0xffff0000
+[PASS] AXI write[13]: actual=0x0000ffff golden=0x0000ffff
+[PASS] AXI write[14]: actual=0xaa55edcb golden=0xaa55edcb
+[PASS] AXI write[15]: actual=0x35016666 golden=0x35016666
+[AXI] ALL PASS (32 checks).
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> b[2J[H
+Running Accelerator AXI Misaligned Test
+
+[AXI] 6 misaligned 32-bit words; exact golden comparison.
+[PASS] Misaligned Read with offset=1
+[PASS] Misaligned Read with offset=2
+[PASS] Misaligned Read with offset=3
+[PASS] Misaligned Write with offset=1
+[PASS] Misaligned Write with offset=2
+[PASS] Misaligned Write with offset=3
+[AXI] ALL PASS (6 checks).
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> c[2J[H
+Running Basic Convolution Test
+[PASS] Testcase1, Output Correct, Cycles=28932
+[PASS] Testcase2, Output Correct, Cycles=208719
+[PASS] Testcase3, Output Correct, Cycles=827999
+Basic Conv Test: (    1065650) Cycles total
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> d[2J[H
+Running Basic platform tests
+
+=== CPU Load/Store Test (NPU stub) ===
+[CPU] Testing basic load/store on 16 words.
+[PASS] CPU Load/Store Test load[0]: actual=0x00000000 golden=0x00000000
+[PASS] CPU Load/Store Test load[1]: actual=0xffffffff golden=0xffffffff
+[PASS] CPU Load/Store Test load[2]: actual=0x55555555 golden=0x55555555
+[PASS] CPU Load/Store Test load[3]: actual=0xaaaaaaaa golden=0xaaaaaaaa
+[PASS] CPU Load/Store Test load[4]: actual=0x00000001 golden=0x00000001
+[PASS] CPU Load/Store Test load[5]: actual=0x80000000 golden=0x80000000
+[PASS] CPU Load/Store Test load[6]: actual=0x01234567 golden=0x01234567
+[PASS] CPU Load/Store Test load[7]: actual=0x89abcdef golden=0x89abcdef
+[PASS] CPU Load/Store Test load[8]: actual=0x13579bdf golden=0x13579bdf
+[PASS] CPU Load/Store Test load[9]: actual=0x2468ace0 golden=0x2468ace0
+[PASS] CPU Load/Store Test load[10]: actual=0x00ff00ff golden=0x00ff00ff
+[PASS] CPU Load/Store Test load[11]: actual=0xff00ff00 golden=0xff00ff00
+[PASS] CPU Load/Store Test load[12]: actual=0x0000ffff golden=0x0000ffff
+[PASS] CPU Load/Store Test load[13]: actual=0xffff0000 golden=0xffff0000
+[PASS] CPU Load/Store Test load[14]: actual=0x55aa1234 golden=0x55aa1234
+[PASS] CPU Load/Store Test load[15]: actual=0xcafe9999 golden=0xcafe9999
+[NPU] Stub check: Testing NPU Scalar Compute:
+PASS
+[CPU] ALL PASS (32 checks).
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> e[2J[H
+Running Standalone SIMD INT8 MAC Test
+
+=== Standalone SIMD INT8 MAC Test ===
+[SIMD MAC] Backend: hardware CUSTOM-0, funct3=3.
+[PASS] SIMD MAC positive reset: actual=70 (0x00000046), expected=70 (0x00000046)
+[PASS] SIMD MAC signed INT8 reset: actual=-70 (0xffffffba), expected=-70 (0xffffffba)
+[PASS] SIMD MAC accumulate reset: actual=70 (0x00000046), expected=70 (0x00000046)
+[PASS] SIMD MAC accumulate without reset: actual=130 (0x00000082), expected=130 (0x00000082)
+[PASS] SIMD MAC reset after accumulation: actual=-70 (0xffffffba), expected=-70 (0xffffffba)
+[PASS] SIMD MAC all-zero operands: actual=0 (0x00000000), expected=0 (0x00000000)
+[PASS] SIMD MAC -128 times 127: actual=-65024 (0xffff0200), expected=-65024 (0xffff0200)
+[PASS] SIMD MAC mixed -128/127 lanes: actual=1 (0x00000001), expected=1 (0x00000001)
+[SIMD MAC] ALL PASS (8 checks).
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> x[2J[H---
+
+TinyRISC-V SoC Platform
+=======================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> t[2J[H
+Running TFLM inference, verification, and cycles
+
+=== TFLM Functional Verification ===
+Model: mobileViT_xxs.tflite (1212672 bytes)
+Convolution path: software/reference (upstream TFLM ConvPerChannel)
+Tensor arena: 8388608 bytes
+Profile: mobileVit_xxs
+Input profile: zero input
+Output profile: Print Output Value, tolerance=0
+Samples: 1
+AllocateTensors: kTfLiteOk
+
+--- Sample 1/1 ---
+Running inference...
+Invoke status: kTfLiteOk
+Inference complete.
+Output Data unavailable: expected 12 float32 words, got type=9, bytes=10.
+Output (10 bytes):
+00: -32
+01: 114
+02: -38
+03: 52
+04: 50
+05: 127
+06: -120
+07: -128
+08: -71
+09: 80
+
+==============================================
+ Counter |       Total | Starts |   Average   
+---------+-------------+--------+-------------
+    0    |   820973388 |     37 |    22188469
+    1    |      461371 |     66 |        6990
+    2    |           0 |      0 |         n/a
+    3    |           0 |      0 |         n/a
+    4    |           0 |      0 |         n/a
+    5    |           0 |      0 |         n/a
+    6    |           0 |      0 |         n/a
+    7    |           0 |      0 |         n/a
+    8    |           0 |      0 |         n/a
+    9    |           0 |      0 |         n/a
+==============================================
+Cycles: 6504622157
+Time (50000000 Hz): 130092 ms
+---
+
+TinyRISC-V SoC Platform
+=======================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> 

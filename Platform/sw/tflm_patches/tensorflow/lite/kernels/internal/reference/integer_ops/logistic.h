@@ -20,6 +20,7 @@ limitations under the License.
 
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "perf.h"
+#include "cfu.h"
 
 namespace tflite {
 namespace reference_integer_ops {
@@ -35,38 +36,50 @@ inline void Logistic(int32_t input_zero_point, int32_t input_range_radius,
   uint64_t start = perf_get_mcycle64();
   // --------------------------------------------------
 
-  // Integer bits must be in sync with Prepare() function.
-  static constexpr int32_t kInputIntegerBits = 4;
-  static constexpr int32_t kOutputIntegerBits = 8;
-  static constexpr int8_t kMinInt8 = std::numeric_limits<int8_t>::min();
-  static constexpr int8_t kMaxInt8 = std::numeric_limits<int8_t>::max();
-  static constexpr int32_t kOutputZeroPoint = -128;
+  // ================= DESIGN REGION BEGIN =================
+  // int8 Logistic on the NPU (CUSTOM-0, funct3 = 5):
+  //   funct7 0: rs1 = input zero point, rs2 = input range radius
+  //   funct7 1: rs1 = input multiplier, rs2 = input left shift; the NPU
+  //             builds the 256-entry int8 table for this call (the
+  //             saturation branch, MultiplyByQuantizedMultiplier and the
+  //             gemmlowp sigmoid are evaluated in hardware per table entry)
+  //   funct7 2: rs1 = 4 packed int8 inputs, rd = 4 packed int8 outputs
+  cfu_raw_op_hw(5, 0, input_zero_point, input_range_radius);
+  cfu_raw_op_hw(5, 1, input_multiplier, input_left_shift);
 
-  for (int i = 0; i < input_size; ++i) {
-    const int32_t input =
-        static_cast<int32_t>(input_data[i]) - input_zero_point;
-    if (input <= -input_range_radius) {
-      output_data[i] = kMinInt8;
-    } else if (input >= input_range_radius) {
-      output_data[i] = kMaxInt8;
-    } else {
-      const int32_t input_in_q4 = MultiplyByQuantizedMultiplier(
-          input, input_multiplier, input_left_shift);
-      using FixedPoint4 = gemmlowp::FixedPoint<int32_t, kInputIntegerBits>;
-      const int32_t output_in_q0 =
-          gemmlowp::logistic(FixedPoint4::FromRaw(input_in_q4)).raw();
-
-      // Rescale and downcast.
-      using gemmlowp::RoundingDivideByPOT;
-      int32_t output_in_q23 =
-          RoundingDivideByPOT(output_in_q0, 31 - kOutputIntegerBits);
-      output_in_q23 = std::min(std::max(output_in_q23 + kOutputZeroPoint,
-                                        static_cast<int32_t>(kMinInt8)),
-                               static_cast<int32_t>(kMaxInt8));
-      output_data[i] = static_cast<int8_t>(output_in_q23);
+  int i = 0;
+  // Head: single elements until the input and output are word aligned.
+  while (i < input_size && ((reinterpret_cast<uintptr_t>(input_data + i) |
+                             reinterpret_cast<uintptr_t>(output_data + i)) &
+                            3u)) {
+    const uint32_t r = cfu_raw_op_hw(5, 2, static_cast<uint32_t>(
+                                               static_cast<uint8_t>(input_data[i])),
+                                     0);
+    output_data[i] = static_cast<int8_t>(r & 0xff);
+    ++i;
+    if (((reinterpret_cast<uintptr_t>(input_data + i) ^
+          reinterpret_cast<uintptr_t>(output_data + i)) & 3u) == 0)
+      continue;
+    // Different alignments: no common aligned point; fall through to tail.
+    break;
+  }
+  const uint32_t* in_w = reinterpret_cast<const uint32_t*>(input_data + i);
+  uint32_t* out_w = reinterpret_cast<uint32_t*>(output_data + i);
+  if (((reinterpret_cast<uintptr_t>(input_data + i) |
+        reinterpret_cast<uintptr_t>(output_data + i)) & 3u) == 0) {
+    for (; i + 4 <= input_size; i += 4) {
+      *out_w++ = cfu_raw_op_hw(5, 2, *in_w++, 0);
     }
   }
-  
+  // Tail (and misaligned fallback): one element per call, lane 0 only.
+  for (; i < input_size; ++i) {
+    const uint32_t r = cfu_raw_op_hw(5, 2, static_cast<uint32_t>(
+                                               static_cast<uint8_t>(input_data[i])),
+                                     0);
+    output_data[i] = static_cast<int8_t>(r & 0xff);
+  }
+  // ================== DESIGN REGION END ==================
+
   // record cycles
   // TIMING END AND STATISTICS - DO NOT MODIFY OR MOVE.
   // --------------------------------------------------

@@ -1,0 +1,4 @@
+rank histogram: 1:84 2:91 3:79 4:89 5:74 6:83
+cases run: 500, failing cases: 0, protocol errors: 0, engine cycles: 600240, burst-engine cases: 238
+npu_transpose_tb: PASS (500/500)
+sim/npu_transpose_tb.sv:349: $finish called at 6219600000 (1ps)

@@ -20,162 +20,68 @@ limitations under the License.
 #include "tensorflow/lite/kernels/internal/types.h"
 #include "perf.h"
 #include "cfu.h"
+#include "cbo.h"
 #include <stdio.h>
 
 namespace tflite {
 
 namespace reference_ops {
 
+// Transpose on the NPU (CUSTOM-0 funct3 = 6, see hw/srcs/npu_transpose.v).
+//
+// The accelerator walks the output tensor in row-major order and fetches /
+// stores every element itself over AXI, so the CPU never touches tensor
+// elements. The CPU only programs, per output dimension, the extent and the
+// signed input byte delta applied when that dimension is the one that
+// advances:  delta[d] = stride[d] - sum_{e>d} (extent[e] - 1) * stride[e].
+// Dimensions are right-aligned into the 6 hardware dimensions (extent 1).
+//
+// The NPU reads and writes DDR directly, so the input is cleaned out of the
+// D-cache first and the output range is cleaned + invalidated before the run
+// (preserving unrelated bytes that share a boundary line) and invalidated
+// afterwards.
+//
+// Burst mode (CUSTOM-0 funct3 = 6, funct7 = 5, hw/srcs/npu_transpose_fast.v):
+// for int8 tensors of at most 16 KiB the NPU first reads the whole input with
+// AXI burst reads into on-chip RAM, gathers 4 output bytes per cycle and writes
+// them back with AXI burst writes. It needs a word aligned output, total % 4 == 0
+// and the product R of the k innermost output extents to be a multiple of 4
+// (R <= 4096); otherwise the single-beat engine above is used.
+//
+// Note: template parameter N is not used; it is kept for API compatibility.
 namespace transpose_internal {
 
-// Recursively explores all the dimensions of the output tensor and writes the
-// corresponding input tensor data.
-//
-// - depth: the current depth of the recursion.
-// - dims: tensor dimension count, also `perm` size.
-// - perm: permutation array.
-// - input_data: Running input data pointer. If depth == num_dims-1, this points
-//               to the first element of the last dimension to traverse.
-// - input_stride: Reverse partial product of input shapes.
-// - output_data: Running output data pointer. If depth == num_dims-1, this
-//                points to the first element of the last dimension to traverse.
-// - output_stride: Reverse partial product of output shapes.
-// - output_shape: Shape of the output tensor.
-//
-// ## Algorithm explanation
-//
-// Assume a 3D tensor T with a shape of [I, J, K] stored in row major order.
-// T[i, j, k] is at position `i*J*K + j*K + k` in the tensor buffer.
-//
-// If we want to go through the whole tensor iteratively, we can use loops.
-//
-// ```
-// for(i = 0; i < I; ++i) {
-//   for(j = 0; j < J; ++j) {
-//     for(k = 0; k < K; ++k) {
-//        T.data[i*J*K + j*K + k] = ...
-//     }
-//   }
-// }
-// ```
-//
-// We can also compute the offset as we go through the loops.
-//
-// ```
-// stride_i = K * J;
-// stride_j = K;
-// stride_k = 1;
-// for(i = 0; i < I; ++i) {
-//   offset_i = i * stride_i;
-//   offset_j = 0;
-//   for(j = 0; j < J; ++j) {
-//     offset_j += stride_j;
-//     offset_k = 0;
-//     for(k = 0; k < K; ++k) {
-//        offset_k += stride_k;
-//        T.data[offset_i + offset_j + offset_k] = ...
-//     }
-//   }
-// }
-// ```
-//
-// This nicely extends to a recursive version which is the base of this
-// algorithm and supports any number of dimensions.
-//
-// ```
-// shape = [I, J, K]
-// strides = [K*J, K, 1]
-// void recurse(T* data, shape, strides, depth = 0) {
-//   if(depth == shape.size) {
-//     *data = ...
-//   } else {
-//     for(a = 0; a < shape[depth]; ++a) {
-//       recurse(data, shape, strides, depth+1);
-//       data += strides[depth];
-//     }
-//   }
-// }
-// ```
-template <typename T>
-void TransposeImpl(const int depth, const int dims, const int32_t* perm,
-                   const T* input_data, const int* input_stride, T* output_data,
-                   const int* output_stride, const int32_t* output_shape) {
+constexpr int kHwDims = 6;
+static_assert(kTransposeMaxDimensions <= kHwDims,
+              "NPU transpose supports at most 6 dimensions");
 
-  const int dimension_size = output_shape[depth];
-  if (depth == dims - 1) {
-    const int loop_stride = input_stride[perm[depth]];
-    for (int i = 0; i < dimension_size; ++i) {
-      output_data[i] = *input_data;
-      input_data += loop_stride;
-    }
-  } else {
-    for (int i = 0; i < dimension_size; ++i) {
-      TransposeImpl(depth + 1, dims, perm, input_data, input_stride,
-                    output_data, output_stride, output_shape);
-
-      input_data += input_stride[perm[depth]];
-      output_data += output_stride[depth];  
-    }
+inline void CacheClean(const void* ptr, uintptr_t bytes) {
+  uintptr_t a = reinterpret_cast<uintptr_t>(ptr) & ~static_cast<uintptr_t>(31);
+  const uintptr_t end = reinterpret_cast<uintptr_t>(ptr) + bytes;
+  for (; a + 128 <= end; a += 128) {
+    cbo_clean(reinterpret_cast<void*>(a));
+    cbo_clean(reinterpret_cast<void*>(a + 32));
+    cbo_clean(reinterpret_cast<void*>(a + 64));
+    cbo_clean(reinterpret_cast<void*>(a + 96));
   }
+  for (; a < end; a += 32) cbo_clean(reinterpret_cast<void*>(a));
 }
 
-// Compile-time switch to get the storage type of the transposition.
-template <int Size>
-struct TransposeStorageType;
-
-template <>
-struct TransposeStorageType<1> {
-  using type = int8_t;
-};
-
-template <>
-struct TransposeStorageType<2> {
-  using type = int16_t;
-};
-
-template <>
-struct TransposeStorageType<4> {
-  using type = int32_t;
-};
-
-template <>
-struct TransposeStorageType<8> {
-  using type = int64_t;
-};
-
-// Sets up the stride arrays for the recursive transpose algorithm.
-//
-// Implementation notes:
-//
-// This is a reverse partial product. We could use standard algorithms to
-// implement this but the result is not a readable and is tricky to get right
-// because the first element must be set to 1, which leads to offset
-// shenanigans:
-//
-// ```
-//   stride[dims - 1] = 1;
-//   std::partial_sum(std::make_reverse_iterator(shape + dims),
-//                    std::make_reverse_iterator(shape + 1),
-//                    stride.rend() - input_rank + 1, std::multiplies());
-// ```
-//
-// Note that Abseil isn't used in kernels implementation. That would make the
-// above solution more readable.
-inline void SetupTransposeStrides(
-    std::array<int, kTransposeMaxDimensions>& stride, const int32_t* shape,
-    const int dims) {
-  stride[dims - 1] = 1;
-  for (int i = dims - 2; i >= 0; --i) {
-    stride[i] = stride[i + 1] * shape[i + 1];
+inline void CacheInvalidate(const void* ptr, uintptr_t bytes) {
+  uintptr_t a = reinterpret_cast<uintptr_t>(ptr) & ~static_cast<uintptr_t>(31);
+  const uintptr_t end = reinterpret_cast<uintptr_t>(ptr) + bytes;
+  for (; a + 128 <= end; a += 128) {
+    cbo_invalidate(reinterpret_cast<void*>(a));
+    cbo_invalidate(reinterpret_cast<void*>(a + 32));
+    cbo_invalidate(reinterpret_cast<void*>(a + 64));
+    cbo_invalidate(reinterpret_cast<void*>(a + 96));
   }
+  for (; a < end; a += 32) cbo_invalidate(reinterpret_cast<void*>(a));
 }
 
 }  // namespace transpose_internal
 
 // Copies a tensor to an other buffer and permutes its dimensions.
-//
-// Note: template parameter N is not used anymore. It is kept for API
-// compatibility with TFLite micro.
 template <typename T, int N = kTransposeMaxDimensions>
 void Transpose(const TransposeParams& params, const RuntimeShape& input_shape,
                const T* input_data, const RuntimeShape& output_shape,
@@ -186,27 +92,93 @@ void Transpose(const TransposeParams& params, const RuntimeShape& input_shape,
   // --------------------------------------------------
   uint64_t start = perf_get_mcycle64();
   // --------------------------------------------------
-  
-  using transpose_internal::SetupTransposeStrides;
-  using transpose_internal::TransposeImpl;
-  using transpose_internal::TransposeStorageType;
-  // Transpose kernel only does rearranging values not numeric evaluations on
-  // each cell. It's safe to implement per size of scalar type and this trick
-  // keeps the total code size in a reasonable range.
-  using StorageType = typename TransposeStorageType<sizeof(T)>::type;
-  const StorageType* const input_data_storage =
-      reinterpret_cast<const StorageType*>(input_data);
-  StorageType* const output_data_storage =
-      reinterpret_cast<StorageType*>(output_data);
 
+  using namespace transpose_internal;
   const int dims = input_shape.DimensionsCount();
-  std::array<int, kTransposeMaxDimensions> input_stride, output_stride;
-  SetupTransposeStrides(input_stride, input_shape.DimsData(), dims);
-  SetupTransposeStrides(output_stride, output_shape.DimsData(), dims);
-  TransposeImpl(0, dims, &params.perm[0], input_data_storage,
-                input_stride.data(), output_data_storage, output_stride.data(),
-                output_shape.DimsData());
-  
+  const int32_t* const in_dims = input_shape.DimsData();
+  const int32_t* const out_dims = output_shape.DimsData();
+  const int32_t esize = static_cast<int32_t>(sizeof(T));
+
+  // Input strides in elements (reverse partial product of the input shape).
+  int32_t in_stride[kTransposeMaxDimensions];
+  in_stride[dims - 1] = 1;
+  for (int i = dims - 2; i >= 0; --i) {
+    in_stride[i] = in_stride[i + 1] * in_dims[i + 1];
+  }
+
+  int32_t total = 1;
+  for (int d = 0; d < dims; ++d) total *= out_dims[d];
+
+  if (total > 0) {
+    const uintptr_t bytes = static_cast<uintptr_t>(total) * esize;
+    const int pad = kHwDims - dims;
+
+    // Burst mode eligibility (see the comment at the top of this file).
+    int32_t fast_r = 1;
+    int32_t fast_k = 0;
+    bool fast = (esize == 1) && ((total & 3) == 0) &&
+                ((reinterpret_cast<uintptr_t>(output_data) & 3) == 0) &&
+                (((reinterpret_cast<uintptr_t>(input_data) & 3) + bytes) <= 16384);
+    if (fast) {
+      fast = false;
+      for (int h = kHwDims - 1; h >= 0; --h) {
+        const int d = h - pad;
+        fast_r *= (d < 0) ? 1 : out_dims[d];
+        ++fast_k;
+        if ((fast_r & 3) == 0) {
+          fast = (fast_r <= 4096);
+          break;
+        }
+        if (fast_r > 4096) break;
+      }
+    }
+
+    CacheClean(input_data, bytes);
+    if (fast) {
+      // The NPU overwrites every output byte: only lines shared with
+      // neighbouring data must be written back first.
+      const uintptr_t o = reinterpret_cast<uintptr_t>(output_data);
+      if (o & 31) cbo_clean(output_data);
+      if ((o + bytes) & 31) cbo_clean(reinterpret_cast<void*>(o + bytes - 1));
+    } else {
+      CacheClean(output_data, bytes);
+      CacheInvalidate(output_data, bytes);
+    }
+
+    cfu_raw_op_hw(6, 0, reinterpret_cast<uintptr_t>(input_data),
+                  reinterpret_cast<uintptr_t>(output_data));
+    cfu_raw_op_hw(6, 1, esize, 0);
+    for (int h = 0; h < kHwDims; ++h) {
+      const int d = h - pad;
+      if (d < 0) {
+        cfu_raw_op_hw(6, 2, h, 1);
+        cfu_raw_op_hw(6, 3, h, 0);
+      } else {
+        int32_t delta = in_stride[params.perm[d]] * esize;
+        for (int e = d + 1; e < dims; ++e) {
+          delta -= (out_dims[e] - 1) * in_stride[params.perm[e]] * esize;
+        }
+        cfu_raw_op_hw(6, 2, h, out_dims[d]);
+        cfu_raw_op_hw(6, 3, h, delta);
+      }
+    }
+    if (fast) {
+      cfu_raw_op_hw(6, 5, static_cast<uint32_t>(total),
+                    (static_cast<uint32_t>(fast_k) << 16) |
+                        static_cast<uint32_t>(fast_r));
+    }
+    if (fast) {
+      // Start without waiting; the output lines are invalidated while the NPU
+      // runs (the CPU does not touch the output range meanwhile), then wait.
+      cfu_raw_op_hw(6, 6, 0, 0);
+      CacheInvalidate(output_data, bytes);
+      cfu_raw_op_hw(6, 7, 0, 0);
+    } else {
+      cfu_raw_op_hw(6, 4, 0, 0);
+      CacheInvalidate(output_data, bytes);
+    }
+  }
+
   // record cycles
   // TIMING END AND STATISTICS - DO NOT MODIFY OR MOVE.
   // --------------------------------------------------

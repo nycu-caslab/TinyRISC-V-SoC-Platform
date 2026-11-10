@@ -37,7 +37,7 @@ module NPU (
     // AXI4 Master Interface (M_AXI) //
     // AW Channel
     //output  [3:0] M_AXI_AWID,
-    output reg [31:0] M_AXI_AWADDR,
+    output [31:0] M_AXI_AWADDR,
     output [7:0] M_AXI_AWLEN,
     output [2:0] M_AXI_AWSIZE,
     output [1:0] M_AXI_AWBURST,
@@ -46,13 +46,13 @@ module NPU (
     output [2:0] M_AXI_AWPROT,
     output [3:0] M_AXI_AWQOS,
     output [15:0] M_AXI_AWUSER,
-    output reg M_AXI_AWVALID,
+    output M_AXI_AWVALID,
     input M_AXI_AWREADY,
     // W Channel
-    output reg [31:0] M_AXI_WDATA,
-    output reg [3:0] M_AXI_WSTRB,
-    output reg M_AXI_WLAST,
-    output reg M_AXI_WVALID,
+    output [31:0] M_AXI_WDATA,
+    output [3:0] M_AXI_WSTRB,
+    output M_AXI_WLAST,
+    output M_AXI_WVALID,
     input M_AXI_WREADY,
 
     // B Channel
@@ -84,7 +84,13 @@ module NPU (
     input M_AXI_RVALID,
     output M_AXI_RREADY
 );
-    assign M_AXI_AWLEN   = 8'h00;
+
+    reg [31:0] axi_awaddr_r;
+    reg        axi_awvalid_r;
+    reg [31:0] axi_wdata_r;
+    reg [3:0]  axi_wstrb_r;
+    reg        axi_wlast_r;
+    reg        axi_wvalid_r;
     assign M_AXI_AWSIZE  = 3'b010;
     assign M_AXI_AWBURST = 2'b01;
     assign M_AXI_AWLOCK  = 1'b0;
@@ -109,6 +115,18 @@ module NPU (
     localparam [3:0] STATE_AXI_WRITE_RESP    = 4'd6;
     localparam [3:0] STATE_SIMD_MAC          = 4'd7;
     localparam [3:0] STATE_BURST_DOT_PRODUCT = 4'd8;
+    localparam [3:0] STATE_LOGISTIC_BUILD    = 4'd9;
+    localparam [3:0] STATE_LOGISTIC_LOOKUP   = 4'd10;
+    localparam [3:0] STATE_TRANSPOSE         = 4'd11;
+    localparam [3:0] STATE_TRANSPOSE_WAIT    = 4'd12;
+
+    // Transpose (funct3 = 110), see npu_transpose.v:
+    //   funct7 = 0: rs1 = input base, rs2 = output base.
+    //   funct7 = 1: rs1 = element size in bytes.
+    //   funct7 = 2: rs1 = hw dim (0..5, 5 innermost), rs2 = output extent.
+    //   funct7 = 3: rs1 = hw dim, rs2 = signed input byte delta.
+    //   funct7 = 4: run; NPU_done after the last output byte is written.
+    localparam [2:0]  FUNCT3_TRANSPOSE = 3'b110;
 
     localparam [2:0]  FUNCT3_SIMD_MAC                 = 3'b011;
     localparam [31:0] FUNCT7_SIMD_MAC_RESET           = 32'd1;
@@ -122,7 +140,96 @@ module NPU (
     localparam [31:0] FUNCT7_BURST_DOT_PRODUCT_SET_LENGTH = 32'd0;
     localparam [31:0] FUNCT7_BURST_DOT_PRODUCT_COMPUTE    = 32'd1;
 
+    // Logistic (funct3 = 101), int8 TFLM Logistic through a 256-entry table:
+    //   funct7 = 0: rs1 = zero point, rs2 = input range radius; returns 0.
+    //   funct7 = 1: rs1 = multiplier, rs2 = left shift (signed); builds the
+    //               table; NPU_done only after the table is complete.
+    //   funct7 = 2: rs1 = 4 packed int8 (lane 0 = bits [31:24]); rd = 4
+    //               packed int8 logistic outputs.
+    localparam [2:0]  FUNCT3_LOGISTIC            = 3'b101;
+    localparam [31:0] FUNCT7_LOGISTIC_CONFIG     = 32'd0;
+    localparam [31:0] FUNCT7_LOGISTIC_BUILD      = 32'd1;
+    localparam [31:0] FUNCT7_LOGISTIC_COMPUTE    = 32'd2;
+
     reg [3:0] state_r;
+    wire logistic_idle_start = (state_r == STATE_IDLE) && NPU_start &&
+                               (funct3_i[2:0] == FUNCT3_LOGISTIC);
+    wire logistic_busy;
+    wire logistic_build_done;
+    wire [31:0] logistic_lut_out;
+    npu_logistic u_logistic (
+        .clk              (clk),
+        .rst_n            (rst_n),
+        .cfg_a_we         (logistic_idle_start && funct7_i == FUNCT7_LOGISTIC_CONFIG),
+        .cfg_zero_point   (rs1_i),
+        .cfg_range_radius (rs2_i),
+        .build_start      (logistic_idle_start && funct7_i == FUNCT7_LOGISTIC_BUILD),
+        .cfg_multiplier   (rs1_i),
+        .cfg_shift        (rs2_i),
+        .busy             (logistic_busy),
+        .build_done       (logistic_build_done),
+        .lookup_in        (rs1_i),
+        .lut_out          (logistic_lut_out)
+    );
+
+    wire transpose_idle_cmd = (state_r == STATE_IDLE) && NPU_start &&
+                              (funct3_i[2:0] == FUNCT3_TRANSPOSE);
+    wire        t_done, t_arvalid, t_rready, t_awvalid, t_wvalid, t_bready;
+    wire [31:0] t_araddr, t_awaddr, t_wdata;
+    wire [3:0]  t_wstrb;
+    reg         t_fast;
+    wire        f_busy;
+    wire        transpose_owns = (state_r == STATE_TRANSPOSE) || (t_fast && f_busy);
+    // Fast (burst) transpose mode: selected by funct7=5, cleared by funct7=1.
+    // funct7=4: start and wait; funct7=6: start, return immediately (fast mode
+    // only); funct7=7: wait until the fast engine is idle.
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) t_fast <= 1'b0;
+        else if (transpose_idle_cmd) begin
+            if (funct7_i == 32'd1) t_fast <= 1'b0;
+            else if (funct7_i == 32'd5) t_fast <= 1'b1;
+        end
+    end
+    wire        f_done, f_arvalid, f_rready, f_awvalid, f_wvalid, f_wlast, f_bready;
+    wire [31:0] f_araddr, f_awaddr, f_wdata;
+    wire [7:0]  f_arlen, f_awlen;
+    npu_transpose_fast u_transpose_fast (
+        .clk(clk), .rst_n(rst_n),
+        .cfg_base_we (transpose_idle_cmd && funct7_i == 32'd0),
+        .cfg_shape_we(transpose_idle_cmd && funct7_i == 32'd2),
+        .cfg_adv_we  (transpose_idle_cmd && funct7_i == 32'd3),
+        .cfg_fast_we (transpose_idle_cmd && funct7_i == 32'd5),
+        .cfg_rs1(rs1_i), .cfg_rs2(rs2_i),
+        .start(transpose_idle_cmd && (funct7_i == 32'd4 || funct7_i == 32'd6) && t_fast),
+        .done(f_done), .busy(f_busy),
+        .araddr(f_araddr), .arlen(f_arlen), .arvalid(f_arvalid), .arready(M_AXI_ARREADY),
+        .rdata(M_AXI_RDATA), .rvalid(M_AXI_RVALID), .rready(f_rready),
+        .awaddr(f_awaddr), .awlen(f_awlen), .awvalid(f_awvalid), .awready(M_AXI_AWREADY),
+        .wdata(f_wdata), .wlast(f_wlast), .wvalid(f_wvalid), .wready(M_AXI_WREADY),
+        .bvalid(M_AXI_BVALID), .bready(f_bready)
+    );
+    npu_transpose u_transpose (
+        .clk(clk), .rst_n(rst_n),
+        .cfg_base_we (transpose_idle_cmd && funct7_i == 32'd0),
+        .cfg_esize_we(transpose_idle_cmd && funct7_i == 32'd1),
+        .cfg_shape_we(transpose_idle_cmd && funct7_i == 32'd2),
+        .cfg_adv_we  (transpose_idle_cmd && funct7_i == 32'd3),
+        .cfg_rs1(rs1_i), .cfg_rs2(rs2_i),
+        .start(transpose_idle_cmd && funct7_i == 32'd4 && !t_fast),
+        .done(t_done),
+        .araddr(t_araddr), .arvalid(t_arvalid), .arready(M_AXI_ARREADY),
+        .rdata(M_AXI_RDATA), .rvalid(M_AXI_RVALID), .rready(t_rready),
+        .awaddr(t_awaddr), .awvalid(t_awvalid), .awready(M_AXI_AWREADY),
+        .wdata(t_wdata), .wstrb(t_wstrb), .wvalid(t_wvalid), .wready(M_AXI_WREADY),
+        .bvalid(M_AXI_BVALID), .bready(t_bready)
+    );
+    assign M_AXI_AWADDR  = transpose_owns ? (t_fast ? f_awaddr : t_awaddr) : axi_awaddr_r;
+    assign M_AXI_AWVALID = transpose_owns ? (t_fast ? f_awvalid : t_awvalid) : axi_awvalid_r;
+    assign M_AXI_AWLEN   = (transpose_owns && t_fast) ? f_awlen : 8'h00;
+    assign M_AXI_WDATA   = transpose_owns ? (t_fast ? f_wdata : t_wdata) : axi_wdata_r;
+    assign M_AXI_WSTRB   = transpose_owns ? (t_fast ? 4'hF : t_wstrb) : axi_wstrb_r;
+    assign M_AXI_WLAST   = transpose_owns ? (t_fast ? f_wlast : 1'b1) : axi_wlast_r;
+    assign M_AXI_WVALID  = transpose_owns ? (t_fast ? f_wvalid : t_wvalid) : axi_wvalid_r;
     // Single-word AXI read (funct3 = 001) address channel registers.
     reg [31:0] axi_read_araddr_r;
     reg axi_read_arvalid_r;
@@ -160,15 +267,16 @@ module NPU (
 
     // The read channels belong to the burst engine while it runs and to the
     // single-word AXI read otherwise.
-    assign M_AXI_ARADDR  = burst_dot_product_owns_read ? burst_dot_product_araddr
+    assign M_AXI_ARADDR  = transpose_owns ? (t_fast ? f_araddr : t_araddr) :
+                           burst_dot_product_owns_read ? burst_dot_product_araddr
                                                        : axi_read_araddr_r;
-    assign M_AXI_ARLEN   = burst_dot_product_owns_read ? burst_dot_product_arlen
+    assign M_AXI_ARLEN   = transpose_owns ? (t_fast ? f_arlen : 8'h00) : burst_dot_product_owns_read ? burst_dot_product_arlen
                                                        : 8'h00;
-    assign M_AXI_ARVALID = burst_dot_product_owns_read ? burst_dot_product_arvalid
+    assign M_AXI_ARVALID = transpose_owns ? (t_fast ? f_arvalid : t_arvalid) : burst_dot_product_owns_read ? burst_dot_product_arvalid
                                                        : axi_read_arvalid_r;
-    assign M_AXI_RREADY  = burst_dot_product_owns_read ? burst_dot_product_rready
+    assign M_AXI_RREADY  = transpose_owns ? (t_fast ? f_rready : t_rready) : burst_dot_product_owns_read ? burst_dot_product_rready
                                                        : (state_r == STATE_AXI_READ_DATA);
-    assign M_AXI_BREADY  = (state_r == STATE_AXI_WRITE_RESP);
+    assign M_AXI_BREADY  = (state_r == STATE_AXI_WRITE_RESP) || (transpose_owns && (t_fast ? f_bready : t_bready));
     reg [31:0] simd_mac_accumulator_r;
     reg [1:0] read_offset_r;
     reg [31:0] read_first_word_r;
@@ -209,12 +317,12 @@ module NPU (
             read_second_word_r    <= 1'b0;
             axi_read_araddr_r  <= 32'd0;
             axi_read_arvalid_r <= 1'b0;
-            M_AXI_AWADDR  <= 32'd0;
-            M_AXI_AWVALID <= 1'b0;
-            M_AXI_WDATA   <= 32'd0;
-            M_AXI_WSTRB   <= 4'b1111;
-            M_AXI_WLAST   <= 1'b0;
-            M_AXI_WVALID  <= 1'b0;
+            axi_awaddr_r  <= 32'd0;
+            axi_awvalid_r <= 1'b0;
+            axi_wdata_r   <= 32'd0;
+            axi_wstrb_r   <= 4'b1111;
+            axi_wlast_r   <= 1'b0;
+            axi_wvalid_r  <= 1'b0;
             write_second_data_r    <= 32'd0;
             write_second_strb_r    <= 4'd0;
             write_second_pending_r <= 1'b0;
@@ -234,12 +342,12 @@ module NPU (
                             read_second_word_r <= 1'b0;
                             state_r            <= STATE_AXI_READ_ADDR;
                         end else if (funct3_i[2:0] == 3'b010) begin
-                            M_AXI_AWADDR  <= {rs1_i[31:2], 2'b00};
-                            M_AXI_AWVALID <= 1'b1;
-                            M_AXI_WDATA   <= rs2_i << {rs1_i[1:0], 3'b000};
-                            M_AXI_WSTRB   <= 4'b1111 << rs1_i[1:0];
-                            M_AXI_WLAST   <= 1'b1;
-                            M_AXI_WVALID  <= 1'b1;
+                            axi_awaddr_r  <= {rs1_i[31:2], 2'b00};
+                            axi_awvalid_r <= 1'b1;
+                            axi_wdata_r   <= rs2_i << {rs1_i[1:0], 3'b000};
+                            axi_wstrb_r   <= 4'b1111 << rs1_i[1:0];
+                            axi_wlast_r   <= 1'b1;
+                            axi_wvalid_r  <= 1'b1;
                             write_second_data_r <= rs2_i >>
                                 (6'd32 - {1'b0, rs1_i[1:0], 3'b000});
                             write_second_strb_r <=
@@ -258,10 +366,44 @@ module NPU (
                             end else begin
                                 state_r <= STATE_DONE;
                             end
+                        end else if (funct3_i[2:0] == FUNCT3_TRANSPOSE) begin
+                            NPU_out <= 32'd0;
+                            state_r <= (funct7_i == 32'd4) ? STATE_TRANSPOSE :
+                                       (funct7_i == 32'd7) ? STATE_TRANSPOSE_WAIT
+                                                           : STATE_DONE;
+                        end else if (funct3_i[2:0] == FUNCT3_LOGISTIC) begin
+                            if (funct7_i == FUNCT7_LOGISTIC_BUILD) begin
+                                state_r <= STATE_LOGISTIC_BUILD;
+                            end else if (funct7_i == FUNCT7_LOGISTIC_COMPUTE) begin
+                                state_r <= STATE_LOGISTIC_LOOKUP;
+                            end else begin
+                                NPU_out <= 32'd0;
+                                state_r <= STATE_DONE;
+                            end
                         end else begin
                             state_r <= STATE_DONE;
                         end
                     end
+                end
+
+                STATE_TRANSPOSE: begin
+                    if (t_fast ? f_done : t_done) state_r <= STATE_DONE;
+                end
+
+                STATE_TRANSPOSE_WAIT: begin
+                    if (!f_busy) state_r <= STATE_DONE;
+                end
+
+                STATE_LOGISTIC_BUILD: begin
+                    if (logistic_build_done) begin
+                        NPU_out <= 32'd0;
+                        state_r <= STATE_DONE;
+                    end
+                end
+
+                STATE_LOGISTIC_LOOKUP: begin
+                    NPU_out <= logistic_lut_out;
+                    state_r <= STATE_DONE;
                 end
 
                 STATE_COMP: begin
@@ -320,15 +462,15 @@ module NPU (
                 end
 
                 STATE_AXI_WRITE: begin
-                    if (M_AXI_AWVALID && M_AXI_AWREADY) begin
-                        M_AXI_AWVALID <= 1'b0;
+                    if (axi_awvalid_r && M_AXI_AWREADY) begin
+                        axi_awvalid_r <= 1'b0;
                     end
-                    if (M_AXI_WVALID && M_AXI_WREADY) begin
-                        M_AXI_WVALID <= 1'b0;
-                        M_AXI_WLAST  <= 1'b0;
+                    if (axi_wvalid_r && M_AXI_WREADY) begin
+                        axi_wvalid_r <= 1'b0;
+                        axi_wlast_r  <= 1'b0;
                     end
-                    if ((!M_AXI_AWVALID || M_AXI_AWREADY) &&
-                        (!M_AXI_WVALID || M_AXI_WREADY)) begin
+                    if ((!axi_awvalid_r || M_AXI_AWREADY) &&
+                        (!axi_wvalid_r || M_AXI_WREADY)) begin
                         state_r <= STATE_AXI_WRITE_RESP;
                     end
                 end
@@ -336,12 +478,12 @@ module NPU (
                 STATE_AXI_WRITE_RESP: begin
                     if (M_AXI_BVALID && M_AXI_BREADY) begin
                         if (write_second_pending_r) begin
-                            M_AXI_AWADDR  <= M_AXI_AWADDR + 32'd4;
-                            M_AXI_AWVALID <= 1'b1;
-                            M_AXI_WDATA   <= write_second_data_r;
-                            M_AXI_WSTRB   <= write_second_strb_r;
-                            M_AXI_WLAST   <= 1'b1;
-                            M_AXI_WVALID  <= 1'b1;
+                            axi_awaddr_r  <= axi_awaddr_r + 32'd4;
+                            axi_awvalid_r <= 1'b1;
+                            axi_wdata_r   <= write_second_data_r;
+                            axi_wstrb_r   <= write_second_strb_r;
+                            axi_wlast_r   <= 1'b1;
+                            axi_wvalid_r  <= 1'b1;
                             write_second_pending_r <= 1'b0;
                             state_r <= STATE_AXI_WRITE;
                         end else begin

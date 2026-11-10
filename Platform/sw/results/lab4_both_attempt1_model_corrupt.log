@@ -1,0 +1,76 @@
+SYNC!@#[2J[H
+rts |   Average   
+
+===================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> l[2J[H
+Running Lab menu
+[2J[H
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> l[2J[H
+Running run logistic test
+[PASS] LogisticQuantizedInt8AroundZeroShouldMatchGolden
+[PASS] LogisticQuantizedInt8NarrowRangeShouldMatchGolden
+[PASS] LogisticQuantizedInt8BasicShouldMatchGolden
+[PASS] LogisticQuantizedInt8WideRangeShouldMatchGolden
+Logistic tests: 4/4 passed
+---
+
+Lab : Self Test
+===============
+ a: Accelerator AXI Aligned Test
+ b: Accelerator AXI Misaligned Test
+ c: Basic Convolution Test
+ d: Basic platform tests
+ e: Standalone SIMD INT8 MAC Test
+ l: run logistic test
+ t: run transpose test
+ x: eXit to previous menu
+lab> x[2J[H---
+
+rts |   Average   
+
+===================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> t[2J[H
+Running TFLM inference, verification, and cycles
+ olden
+n
+
+ile: mobi---
+Convolution path: software/reference (upstream TFLM ConvPerChannel)
+Tensor arena: 8388608 bytes
+Profile: mobileVit_xxs
+Input profile: zero input
+Output profile: Print Output Value, tolerance=0
+Samples: 1
+Unsupported data type 77 in tensor
+
+Failed to initialize tensor 19
+Failed starting model allocation.
+AllocateTensors failed: status=1.
+---
+
+rts |   Average   
+
+===================
+ l: Lab menu
+ t: TFLM inference, verification, and cycles
+ p: Performance counter tests
+ i: System info
+main> 

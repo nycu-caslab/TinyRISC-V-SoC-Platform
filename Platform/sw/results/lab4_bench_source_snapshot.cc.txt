@@ -1,0 +1,91 @@
+#include <stdint.h>
+#include <stdio.h>
+#include "cbo.h"
+#include "cfu.h"
+#include "perf.h"
+
+namespace {
+alignas(4096) volatile uint8_t buf_a[8192];
+alignas(4096) volatile uint8_t buf_b[8192];
+alignas(32) volatile uint32_t wr_word[8];
+
+#define U8(F, P, O) F((P) + (O)); F((P) + (O) + 32); F((P) + (O) + 64); F((P) + (O) + 96); \
+                    F((P) + (O) + 128); F((P) + (O) + 160); F((P) + (O) + 192); F((P) + (O) + 224)
+#define U32(F, P) U8(F, P, 0); U8(F, P, 256); U8(F, P, 512); U8(F, P, 768)
+#define NOP_(x) __asm__ volatile("" ::"r"(x))
+}  // namespace
+
+void bench_tmp(void) {
+  printf("\n=== BENCH_BEGIN ===\n");
+  // baseline: back-to-back mcycle reads
+  { uint32_t a = perf_get_mcycle(), b = perf_get_mcycle();
+    printf("BENCH mcycle_overhead=%u\n", (unsigned)(b - a)); }
+
+  // Burst read: dot product of two N-byte vectors, 2N/4 beats total.
+  for (unsigned i = 0; i < 8192; i += 32) { cbo_clean(&buf_a[i]); cbo_clean(&buf_b[i]); }
+  const unsigned lens[] = {64, 256, 1024, 4096};
+  for (unsigned li = 0; li < 4; ++li) {
+    unsigned n = lens[li];
+    for (int rep = 0; rep < 3; ++rep) {
+      uint32_t t0 = perf_get_mcycle();
+      (void)cfu_raw_op_hw(4, 0, n, 0);
+      uint32_t r = cfu_raw_op_hw(4, 1, buf_a, buf_b);
+      uint32_t t1 = perf_get_mcycle();
+      printf("BENCH burst bytes=%u beats=%u cycles=%u (res=%u)\n", n, 2 * n / 4,
+             (unsigned)(t1 - t0), (unsigned)r);
+    }
+  }
+
+  // Single-word write latency (cfu_op2 = AXI write)
+  for (int rep = 0; rep < 8; ++rep) {
+    uint32_t t0 = perf_get_mcycle();
+    (void)cfu_raw_op_hw(2, 0, &wr_word[0], 0x1234u + rep);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH axi_write_cycles=%u\n", (unsigned)(t1 - t0));
+  }
+  // Single-word read latency for reference
+  for (int rep = 0; rep < 3; ++rep) {
+    uint32_t t0 = perf_get_mcycle();
+    uint32_t v = cfu_raw_op_hw(1, 0, &wr_word[0], 0);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH axi_read_cycles=%u (v=%u)\n", (unsigned)(t1 - t0), (unsigned)v);
+  }
+
+  // cbo.clean: 32 lines, unrolled. Variant A: lines dirty. Variant B: already clean.
+#define CLN(p) cbo_clean(p)
+#define INV(p) cbo_invalidate(p)
+  for (int rep = 0; rep < 4; ++rep) {
+    for (unsigned i = 0; i < 1024; i += 4) ((volatile uint32_t*)buf_a)[i / 4] = i + rep;  // dirty 32 lines
+    volatile uint8_t* p = buf_a;
+    uint32_t t0 = perf_get_mcycle();
+    U32(CLN, p);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH cbo_clean_dirty 32 lines cycles=%u\n", (unsigned)(t1 - t0));
+  }
+  for (int rep = 0; rep < 4; ++rep) {
+    volatile uint8_t* p = buf_a;
+    uint32_t t0 = perf_get_mcycle();
+    U32(CLN, p);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH cbo_clean_clean 32 lines cycles=%u\n", (unsigned)(t1 - t0));
+  }
+  // cbo.invalidate: variant A lines resident (read first), variant B not resident.
+  for (int rep = 0; rep < 4; ++rep) {
+    uint32_t s = 0;
+    for (unsigned i = 0; i < 1024; i += 4) s += ((volatile uint32_t*)buf_b)[i / 4];
+    NOP_(s);
+    volatile uint8_t* p = buf_b;
+    uint32_t t0 = perf_get_mcycle();
+    U32(INV, p);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH cbo_inv_resident 32 lines cycles=%u\n", (unsigned)(t1 - t0));
+  }
+  for (int rep = 0; rep < 4; ++rep) {
+    volatile uint8_t* p = buf_b;
+    uint32_t t0 = perf_get_mcycle();
+    U32(INV, p);
+    uint32_t t1 = perf_get_mcycle();
+    printf("BENCH cbo_inv_nonresident 32 lines cycles=%u\n", (unsigned)(t1 - t0));
+  }
+  printf("=== BENCH_END ===\n");
+}
